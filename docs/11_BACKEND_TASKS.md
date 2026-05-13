@@ -179,7 +179,7 @@ Expected result:
 
 Read before starting:
 
-- `docs/07_SEED_DATA.md`
+- `docs/08_SEED_DATA.md`
 
 Tasks:
 
@@ -219,7 +219,7 @@ Expected result:
 Read before starting:
 
 - `docs/03_API_CONTRACT.md`
-- `docs/05_LEARNING_LOGIC.md`
+- `docs/06_LEARNING_LOGIC.md`
 
 Tasks:
 
@@ -252,7 +252,7 @@ Expected result:
 Read before starting:
 
 - `docs/03_API_CONTRACT.md`
-- `docs/05_LEARNING_LOGIC.md`
+- `docs/06_LEARNING_LOGIC.md`
 
 Tasks:
 
@@ -286,8 +286,8 @@ Expected result:
 Read before starting:
 
 - `docs/03_API_CONTRACT.md`
-- `docs/05_LEARNING_LOGIC.md`
-- `docs/06_DAILY_TEST_AND_STREAK.md`
+- `docs/06_LEARNING_LOGIC.md`
+- `docs/07_DAILY_TEST_AND_STREAK.md`
 
 Tasks:
 
@@ -326,7 +326,7 @@ Expected result:
 Read before starting:
 
 - `docs/03_API_CONTRACT.md`
-- `docs/06_DAILY_TEST_AND_STREAK.md`
+- `docs/07_DAILY_TEST_AND_STREAK.md`
 
 Tasks:
 
@@ -360,8 +360,8 @@ Expected result:
 
 Read before starting:
 
-- `docs/08_ERROR_HANDLING.md`
-- `docs/09_CODE_STYLE.md`
+- `docs/09_ERROR_HANDLING.md`
+- `docs/10_CODE_STYLE.md`
 
 Tasks:
 

@@ -14,9 +14,9 @@ Before starting any backend task, read:
 - docs/01_BACKEND_ARCHITECTURE.md
 - docs/02_DATABASE_SCHEMA.md
 - docs/03_API_CONTRACT.md
-- docs/05_LEARNING_LOGIC.md
-- docs/07_SEED_DATA.md
-- docs/10_BACKEND_TASKS.md
+- docs/06_LEARNING_LOGIC.md
+- docs/08_SEED_DATA.md
+- docs/11_BACKEND_TASKS.md
 
 Before changing authentication, read:
 
@@ -26,13 +26,13 @@ Before changing authentication, read:
 
 Before changing level completion, progress, learned words, or unlocking logic, read:
 
-- docs/05_LEARNING_LOGIC.md
-- docs/06_DAILY_TEST_AND_STREAK.md
+- docs/06_LEARNING_LOGIC.md
+- docs/07_DAILY_TEST_AND_STREAK.md
 - docs/02_DATABASE_SCHEMA.md
 
 Before changing seed data, read:
 
-- docs/07_SEED_DATA.md
+- docs/08_SEED_DATA.md
 
 ## Tech stack
 

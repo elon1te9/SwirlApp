@@ -9,10 +9,10 @@ Before making Flutter changes, read:
 - `../AGENTS.md`
 - `../docs/00_PROJECT_OVERVIEW.md`
 - `../docs/03_API_CONTRACT.md`
-- `../docs/05_LEARNING_LOGIC.md`
-- `../docs/06_DAILY_TEST_AND_STREAK.md`
-- `../docs/08_ERROR_HANDLING.md`
-- `../docs/11_FLUTTER_TASKS.md`
+- `../docs/06_LEARNING_LOGIC.md`
+- `../docs/07_DAILY_TEST_AND_STREAK.md`
+- `../docs/09_ERROR_HANDLING.md`
+- `../docs/12_FLUTTER_TASKS.md`
 
 ## Flutter stack
 

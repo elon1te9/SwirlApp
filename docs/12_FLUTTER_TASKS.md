@@ -14,11 +14,11 @@ Before implementing Flutter tasks, read:
 
 - `docs/00_PROJECT_OVERVIEW.md`
 - `docs/03_API_CONTRACT.md`
-- `docs/04_FRONTEND_ARCHITECTURE.md`
-- `docs/05_LEARNING_LOGIC.md`
-- `docs/06_DAILY_TEST_AND_STREAK.md`
-- `docs/08_ERROR_HANDLING.md`
-- `docs/12_UI_UX_GUIDE.md`
+- `docs/05_FRONTEND_ARCHITECTURE.md`
+- `docs/06_LEARNING_LOGIC.md`
+- `docs/07_DAILY_TEST_AND_STREAK.md`
+- `docs/09_ERROR_HANDLING.md`
+- `docs/13_UI_UX_GUIDE.md`
 
 ## Flutter stack
 
@@ -376,7 +376,7 @@ Expected result:
 
 Tasks:
 
-- Follow `docs/12_UI_UX_GUIDE.md`.
+- Follow `docs/13_UI_UX_GUIDE.md`.
 - Check small Android screens.
 - Avoid overflow.
 - Ensure forms work with keyboard open.
