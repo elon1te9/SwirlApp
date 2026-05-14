@@ -1,2 +1,3 @@
 <Solution>
+  <Project Path="backend/Swirl.Api/Swirl.Api.csproj" />
 </Solution>
