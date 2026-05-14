@@ -113,3 +113,14 @@ D:\study\Swirl\backend\Swirl.Api\obj\Debug\net8.0\refint\Swirl.Api.dll
 D:\study\Swirl\backend\Swirl.Api\obj\Debug\net8.0\Swirl.Api.pdb
 D:\study\Swirl\backend\Swirl.Api\obj\Debug\net8.0\Swirl.Api.genruntimeconfig.cache
 D:\study\Swirl\backend\Swirl.Api\obj\Debug\net8.0\ref\Swirl.Api.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.Internal.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.Extensions.Identity.Core.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
+D:\study\Swirl\backend\Swirl.Api\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
