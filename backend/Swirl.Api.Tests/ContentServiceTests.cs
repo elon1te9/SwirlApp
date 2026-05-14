@@ -73,13 +73,15 @@ public class ContentServiceTests
         Assert.Equal([1, 2, 4, 5, 6], result.Select(level => level.LevelNumber).ToArray());
 
         var firstLevel = result[0];
+        var expectedFirstLevelWordsCount = await CountActiveWordsAsync(dbContext, foodLevels[0].Id);
+        var expectedFirstLevelExercisesCount = await CountActiveExercisesAsync(dbContext, foodLevels[0].Id);
         Assert.Equal(foodLevels[0].Id, firstLevel.Id);
         Assert.Equal(foodLevels[0].SectionId, firstLevel.SectionId);
         Assert.Equal("Food Level 1", firstLevel.Title);
         Assert.Equal("A1", firstLevel.CefrLevel);
         Assert.Equal("Level 1 for Food section", firstLevel.Description);
-        Assert.Equal(1, firstLevel.WordsCount);
-        Assert.Equal(1, firstLevel.ExercisesCount);
+        Assert.Equal(expectedFirstLevelWordsCount, firstLevel.WordsCount);
+        Assert.Equal(expectedFirstLevelExercisesCount, firstLevel.ExercisesCount);
         Assert.False(firstLevel.IsFinalTest);
         Assert.Equal("completed", firstLevel.Status);
 
@@ -132,8 +134,8 @@ public class ContentServiceTests
         Assert.Equal(2, result.LevelNumber);
         Assert.Equal("A1", result.CefrLevel);
         Assert.Equal("Level 2 for Food section", result.Description);
-        Assert.Equal(1, result.WordsCount);
-        Assert.Equal(1, result.ExercisesCount);
+        Assert.Equal(await CountActiveWordsAsync(dbContext, secondLevel.Id), result.WordsCount);
+        Assert.Equal(await CountActiveExercisesAsync(dbContext, secondLevel.Id), result.ExercisesCount);
         Assert.False(result.IsFinalTest);
         Assert.Equal("available", result.Status);
         Assert.True(result.WordsLearned);
@@ -257,6 +259,12 @@ public class ContentServiceTests
             .Where(level => level.Section.Title == sectionTitle)
             .OrderBy(level => level.SortOrder)
             .ToListAsync();
+
+    private static async Task<int> CountActiveWordsAsync(AppDbContext dbContext, int levelId) =>
+        await dbContext.Words.CountAsync(word => word.LevelId == levelId && word.IsActive);
+
+    private static async Task<int> CountActiveExercisesAsync(AppDbContext dbContext, int levelId) =>
+        await dbContext.Exercises.CountAsync(exercise => exercise.LevelId == levelId && exercise.IsActive);
 
     private static async Task<AppDbContext> CreateSeededDbContextAsync()
     {

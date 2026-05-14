@@ -2,14 +2,18 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swirl.Api.Interfaces;
+using Swirl.Api.Requests;
 using Swirl.Api.Responses;
+using Swirl.Api.Services;
 
 namespace Swirl.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/levels")]
-public class LevelsController(IContentService contentService) : ControllerBase
+public class LevelsController(
+    IContentService contentService,
+    IWordLearningService wordLearningService) : ControllerBase
 {
     [HttpGet("{levelId:int}")]
     public async Task<ActionResult<LevelDetailsResponse>> GetLevel(
@@ -33,6 +37,56 @@ public class LevelsController(IContentService contentService) : ControllerBase
             : Ok(level);
     }
 
+    [HttpGet("{levelId:int}/words")]
+    public async Task<ActionResult<List<WordResponse>>> GetLevelWords(
+        int levelId,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return CreateUnauthorizedResult();
+        }
+
+        try
+        {
+            return Ok(await wordLearningService.GetLevelWordsAsync(
+                userId.Value,
+                levelId,
+                cancellationToken));
+        }
+        catch (ApiException exception)
+        {
+            return ToErrorResult(exception);
+        }
+    }
+
+    [HttpPost("{levelId:int}/words/mark-learned")]
+    public async Task<ActionResult<MarkLevelWordsLearnedResponse>> MarkLevelWordsLearned(
+        int levelId,
+        MarkLevelWordsLearnedRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return CreateUnauthorizedResult();
+        }
+
+        try
+        {
+            return Ok(await wordLearningService.MarkLevelWordsLearnedAsync(
+                userId.Value,
+                levelId,
+                request,
+                cancellationToken));
+        }
+        catch (ApiException exception)
+        {
+            return ToErrorResult(exception);
+        }
+    }
+
     private Guid? GetCurrentUserId()
     {
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -42,4 +96,17 @@ public class LevelsController(IContentService contentService) : ControllerBase
             ? userId
             : null;
     }
+
+    private static UnauthorizedObjectResult CreateUnauthorizedResult() =>
+        new(new ErrorResponse(new ErrorDetails(
+            "unauthorized",
+            "Authentication is required")));
+
+    private ObjectResult ToErrorResult(ApiException exception) =>
+        StatusCode(
+            exception.StatusCode,
+            new ErrorResponse(new ErrorDetails(
+                exception.Code,
+                exception.Message,
+                exception.Details)));
 }

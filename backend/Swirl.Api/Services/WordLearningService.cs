@@ -1,0 +1,207 @@
+using Microsoft.EntityFrameworkCore;
+using Swirl.Api.Data;
+using Swirl.Api.Interfaces;
+using Swirl.Api.Models;
+using Swirl.Api.Requests;
+using Swirl.Api.Responses;
+
+namespace Swirl.Api.Services;
+
+public class WordLearningService(AppDbContext dbContext) : IWordLearningService
+{
+    private const string LockedStatus = "locked";
+    private const string AvailableStatus = "available";
+    private const string CompletedStatus = "completed";
+
+    public async Task<List<WordResponse>> GetLevelWordsAsync(
+        Guid userId,
+        int levelId,
+        CancellationToken cancellationToken = default)
+    {
+        var access = await GetAccessibleLevelAsync(userId, levelId, cancellationToken);
+
+        if (access.Level.IsFinalTest)
+        {
+            return [];
+        }
+
+        return await dbContext.Words
+            .Where(word => word.LevelId == levelId && word.IsActive)
+            .OrderBy(word => word.Id)
+            .Select(word => new WordResponse
+            {
+                Id = word.Id,
+                English = word.English,
+                Russian = word.Russian,
+                Transcription = word.Transcription,
+                PartOfSpeech = word.PartOfSpeech,
+                ImageUrl = word.ImageUrl,
+                AudioUrl = word.AudioUrl
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<MarkLevelWordsLearnedResponse> MarkLevelWordsLearnedAsync(
+        Guid userId,
+        int levelId,
+        MarkLevelWordsLearnedRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var distinctWordIds = request.WordIds
+            .Distinct()
+            .ToArray();
+
+        if (distinctWordIds.Length == 0)
+        {
+            throw CreateValidationException("wordIds", "Word ids are required");
+        }
+
+        var access = await GetAccessibleLevelAsync(userId, levelId, cancellationToken);
+
+        if (access.Level.IsFinalTest)
+        {
+            throw CreateValidationException("levelId", "Final tests do not introduce new words");
+        }
+
+        var activeWordIds = await dbContext.Words
+            .Where(word => word.LevelId == levelId && word.IsActive)
+            .OrderBy(word => word.Id)
+            .Select(word => word.Id)
+            .ToArrayAsync(cancellationToken);
+
+        var activeWordIdsSet = activeWordIds.ToHashSet();
+        if (distinctWordIds.Any(wordId => !activeWordIdsSet.Contains(wordId)))
+        {
+            throw CreateValidationException("wordIds", "Word ids must belong to the level");
+        }
+
+        if (distinctWordIds.Length != activeWordIds.Length)
+        {
+            throw CreateValidationException("wordIds", "All active level words must be marked as learned");
+        }
+
+        var existingLearnedWordIds = await dbContext.UserWordProgresses
+            .Where(progress =>
+                progress.UserId == userId
+                && activeWordIds.Contains(progress.WordId))
+            .Select(progress => progress.WordId)
+            .ToListAsync(cancellationToken);
+
+        var existingLearnedWordIdsSet = existingLearnedWordIds.ToHashSet();
+        var now = CreateTimestamp();
+
+        dbContext.UserWordProgresses.AddRange(activeWordIds
+            .Where(wordId => !existingLearnedWordIdsSet.Contains(wordId))
+            .Select(wordId => new UserWordProgress
+            {
+                UserId = userId,
+                WordId = wordId,
+                LearnedAt = now
+            }));
+
+        var levelProgress = access.Progress;
+        if (levelProgress is null)
+        {
+            levelProgress = new UserLevelProgress
+            {
+                UserId = userId,
+                LevelId = levelId,
+                Status = AvailableStatus,
+                WordsLearned = true,
+                AttemptsCount = 0,
+                UnlockedAt = now
+            };
+            dbContext.UserLevelProgresses.Add(levelProgress);
+        }
+        else
+        {
+            levelProgress.WordsLearned = true;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new MarkLevelWordsLearnedResponse
+        {
+            LevelId = levelId,
+            WordsLearned = true,
+            LearnedWordsCount = activeWordIds.Length
+        };
+    }
+
+    private async Task<LevelAccess> GetAccessibleLevelAsync(
+        Guid userId,
+        int levelId,
+        CancellationToken cancellationToken)
+    {
+        var level = await dbContext.Levels
+            .Include(candidate => candidate.Section)
+            .FirstOrDefaultAsync(
+                candidate =>
+                    candidate.Id == levelId
+                    && candidate.IsActive
+                    && candidate.Section.IsActive,
+                cancellationToken);
+
+        if (level is null)
+        {
+            throw new ApiException(
+                StatusCodes.Status404NotFound,
+                "not_found",
+                "Resource not found");
+        }
+
+        var progress = await dbContext.UserLevelProgresses
+            .FirstOrDefaultAsync(
+                candidate => candidate.UserId == userId && candidate.LevelId == levelId,
+                cancellationToken);
+
+        var status = progress?.Status ?? await GetFallbackLevelStatusAsync(level, cancellationToken);
+        if (status == LockedStatus)
+        {
+            throw new ApiException(
+                StatusCodes.Status409Conflict,
+                "level_locked",
+                "This level is locked");
+        }
+
+        return new LevelAccess(level, progress);
+    }
+
+    private async Task<string> GetFallbackLevelStatusAsync(
+        Level level,
+        CancellationToken cancellationToken)
+    {
+        if (level.IsFinalTest)
+        {
+            return LockedStatus;
+        }
+
+        var firstNormalLevelId = await dbContext.Levels
+            .Where(candidate =>
+                candidate.SectionId == level.SectionId
+                && candidate.IsActive
+                && !candidate.IsFinalTest)
+            .OrderBy(candidate => candidate.SortOrder)
+            .Select(candidate => candidate.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return level.Id == firstNormalLevelId
+            ? AvailableStatus
+            : LockedStatus;
+    }
+
+    private static ApiException CreateValidationException(string field, string message) =>
+        new(
+            StatusCodes.Status400BadRequest,
+            "validation_error",
+            "Validation failed",
+            new Dictionary<string, string[]>
+            {
+                [field] = [message]
+            });
+
+    private static DateTime CreateTimestamp() =>
+        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+    private sealed record LevelAccess(Level Level, UserLevelProgress? Progress);
+}
