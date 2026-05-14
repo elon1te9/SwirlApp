@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Swirl.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cae2f027479664e169fe5b7a848b6b5f5fb2d2a2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ccb3a31a9a6bdbda47a3680089eb87185c9e328e")]
 [assembly: System.Reflection.AssemblyProductAttribute("Swirl.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Swirl.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
