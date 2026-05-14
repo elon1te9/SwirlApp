@@ -24,6 +24,8 @@ Swirl.Api/
   Interfaces/
   Migrations/
   Models/
+  Requests/
+  Responses/
   Services/
   appsettings.json
   Program.cs
@@ -40,7 +42,7 @@ Controllers should:
 - validate request models
 - get current user id from JWT when needed
 - call services
-- return DTO responses from `Models`
+- return DTO responses from `Responses`
 
 Controllers should not contain complex business logic.
 
@@ -89,13 +91,18 @@ Data layer should contain:
 `Models` should contain:
 
 - database entities
-- request models
-- response models
-- API contracts
 
 API controllers must not expose EF entities directly.
 
-All API responses should return request/response DTO models, not EF entities.
+### Requests
+
+`Requests` should contain API request DTO models.
+
+### Responses
+
+`Responses` should contain API response DTO models.
+
+All API responses should return response DTO models, not EF entities.
 
 ### Hubs
 
@@ -192,7 +199,9 @@ Use CancellationToken where practical.
 
 - Do not create folders `DTOs`, `Repositories`, `Mapping`, `Middleware`, `Extensions`, `Seed` unless explicitly requested later.
 - Place seed logic in `Data`.
-- Place EF entities and request/response DTO models in `Models`.
+- Place EF entities in `Models`.
+- Place request DTO models in `Requests`.
+- Place response DTO models in `Responses`.
 
 ## MVP architecture principle
 

@@ -54,6 +54,8 @@ Swirl.Api/
   Interfaces/
   Migrations/
   Models/
+  Requests/
+  Responses/
   Services/
   appsettings.json
   Program.cs
@@ -64,7 +66,9 @@ Structure rules:
 
 - `Controllers` - HTTP API controllers.
 - `Data` - `AppDbContext`, EF Core configuration, database setup, seed logic.
-- `Models` - database entities and request/response DTO models.
+- `Models` - database entities.
+- `Requests` - API request DTO models.
+- `Responses` - API response DTO models.
 - `Interfaces` - service interfaces.
 - `Services` - business logic services.
 - `Migrations` - EF Core migrations.
@@ -81,7 +85,8 @@ Controllers should:
 - validate basic request data
 - get current user id from JWT when needed
 - call services
-- return request/response DTO models from `Models`
+- accept request DTO models from `Requests`
+- return response DTO models from `Responses`
 
 Controllers should not contain:
 
@@ -123,15 +128,36 @@ Use interfaces for:
 
 ## Models
 
-Place EF entities and request/response DTO models in `Models`.
+Place EF entities in `Models`.
 
 Do not expose EF Core entities directly from controllers.
 
-Recommended request/response model naming:
+Entities should represent database tables.
+
+Entities should not contain complex business logic.
+
+Use navigation properties only where they make queries easier and do not create unnecessary complexity.
+
+## Requests
+
+Place API request DTO models in `Requests`.
+
+Recommended request model naming:
 
 ```text
 RegisterRequest
 LoginRequest
+CompleteLevelRequest
+CompleteDailyTestRequest
+```
+
+## Responses
+
+Place API response DTO models in `Responses`.
+
+Recommended response model naming:
+
+```text
 AuthResponse
 CurrentUserResponse
 ProfileResponse
@@ -140,18 +166,10 @@ LevelResponse
 WordResponse
 LevelSessionResponse
 ExerciseResponse
-CompleteLevelRequest
 CompleteLevelResponse
 DailyTestResponse
-CompleteDailyTestRequest
 CompleteDailyTestResponse
 ```
-
-Entities should represent database tables.
-
-Entities should not contain complex business logic.
-
-Use navigation properties only where they make queries easier and do not create unnecessary complexity.
 
 ## Async
 
@@ -221,7 +239,7 @@ Use JSON request and response bodies.
 
 Use meaningful HTTP status codes.
 
-Use request/response DTO models for all responses.
+Use response DTO models for all responses.
 
 Do not return database entities directly.
 

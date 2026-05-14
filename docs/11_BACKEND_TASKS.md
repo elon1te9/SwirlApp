@@ -21,6 +21,8 @@ Swirl.Api/
   Interfaces/
   Migrations/
   Models/
+  Requests/
+  Responses/
   Services/
   appsettings.json
   Program.cs
@@ -31,7 +33,9 @@ Folder responsibilities:
 
 - `Controllers` — HTTP API controllers.
 - `Data` — `AppDbContext`, EF Core configuration, database setup, seed logic.
-- `Models` — database entities and request/response DTO models.
+- `Models` — database entities.
+- `Requests` — API request DTO models.
+- `Responses` — API response DTO models.
 - `Interfaces` — service interfaces.
 - `Services` — business logic services.
 - `Migrations` — EF Core migrations.
@@ -158,7 +162,8 @@ Dependencies:
 
 Tasks:
 
-- Create auth request/response models in `Models`.
+- Create auth request DTO models in `Requests`.
+- Create auth response DTO models in `Responses`.
 - Create `IAuthService` in `Interfaces`.
 - Create `AuthService` in `Services`.
 - Implement password hashing.
@@ -204,7 +209,8 @@ Read before starting:
 
 Tasks:
 
-- Create profile and avatar models in `Models`.
+- Create profile and avatar response DTO models in `Responses`.
+- Create avatar change request DTO models in `Requests`.
 - Create `IProfileService` in `Interfaces`.
 - Create `ProfileService` in `Services`.
 - Implement avatar list endpoint.
@@ -287,7 +293,7 @@ Read before starting:
 
 Tasks:
 
-- Create section and level response models in `Models`.
+- Create section and level response DTO models in `Responses`.
 - Create `IContentService` or similar service interface in `Interfaces`.
 - Create content service in `Services`.
 - Implement getting sections with user progress.
@@ -320,7 +326,8 @@ Read before starting:
 
 Tasks:
 
-- Create word response models in `Models`.
+- Create word response DTO models in `Responses`.
+- Create mark-learned request DTO models in `Requests` if the endpoint needs a body.
 - Implement getting words for level.
 - Implement marking level words as learned.
 - Save learned words in `user_word_progress`.
@@ -355,8 +362,9 @@ Read before starting:
 
 Tasks:
 
-- Create level session models in `Models`.
-- Create complete level request/response models in `Models`.
+- Create level session response DTO models in `Responses`.
+- Create complete level request DTO models in `Requests`.
+- Create complete level response DTO models in `Responses`.
 - Create `ILearningService` in `Interfaces`.
 - Create `LearningService` in `Services`.
 - Implement full level session endpoint.
@@ -398,7 +406,8 @@ Read before starting:
 
 Tasks:
 
-- Create daily test models in `Models`.
+- Create daily test request DTO models in `Requests`.
+- Create daily test response DTO models in `Responses`.
 - Create `IDailyTestService` in `Interfaces`.
 - Create `DailyTestService` in `Services`.
 - Generate daily test from learned words.
@@ -465,7 +474,9 @@ Expected result:
 - Keep controllers thin.
 - Put business logic in `Services`.
 - Put service interfaces in `Interfaces`.
-- Put entities and request/response models in `Models`.
+- Put entities in `Models`.
+- Put request DTO models in `Requests`.
+- Put response DTO models in `Responses`.
 - Put database context and seed logic in `Data`.
 - Each stage that introduces endpoints should follow `docs/09_ERROR_HANDLING.md` immediately.
 - Stage 10 is final alignment and polish, not the first time error handling is considered.

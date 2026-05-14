@@ -23,6 +23,8 @@ Swirl.Api/
   Interfaces/
   Migrations/
   Models/
+  Requests/
+  Responses/
   Services/
   appsettings.json
   Program.cs
@@ -33,7 +35,9 @@ Folder responsibilities:
 
 - `Controllers` — HTTP API controllers.
 - `Data` — `AppDbContext`, EF Core configuration, database setup, seed logic.
-- `Models` — database entities and request/response DTO models.
+- `Models` — database entities.
+- `Requests` — API request DTO models.
+- `Responses` — API response DTO models.
 - `Interfaces` — service interfaces.
 - `Services` — business logic services.
 - `Migrations` — EF Core migrations.
@@ -66,11 +70,15 @@ This keeps the educational MVP simpler and closer to the preferred project struc
 
 Decision:
 
-Request and response DTO models should be placed in `Models`.
+Database entities should be placed in `Models`.
+
+Request DTO models should be placed in `Requests`.
+
+Response DTO models should be placed in `Responses`.
 
 Reason:
 
-The selected backend structure uses one `Models` folder for both database entities and API models.
+Keeping entities and API contracts in separate folders makes the backend structure clearer while preserving a simple MVP architecture.
 
 ## 4. Controllers and services
 
