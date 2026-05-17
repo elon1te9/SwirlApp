@@ -7,10 +7,20 @@ namespace Swirl.Api.Controllers;
 
 [ApiController]
 [Route("api/avatars")]
-public class AvatarsController(IProfileService profileService) : ControllerBase
+public class AvatarsController : ControllerBase
 {
+    private readonly IProfileService _profileService;
+
+    public AvatarsController(IProfileService profileService)
+    {
+        _profileService = profileService;
+    }
+
     [HttpGet]
     [AllowAnonymous]
-    public async Task<ActionResult<List<AvatarResponse>>> GetAvatars(CancellationToken cancellationToken) =>
-        Ok(await profileService.GetAvatarsAsync(cancellationToken));
+    public async Task<ActionResult<List<AvatarResponse>>> GetAvatars(CancellationToken cancellationToken)
+    {
+        var avatars = await _profileService.GetAvatarsAsync(cancellationToken);
+        return Ok(avatars);
+    }
 }

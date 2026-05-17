@@ -9,21 +9,34 @@ namespace Swirl.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController : ControllerBase
 {
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
+    {
+        _authService = authService;
+    }
+
     [HttpPost("register")]
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Register(
         RegisterRequest request,
         CancellationToken cancellationToken)
-        => Ok(await authService.RegisterAsync(request, cancellationToken));
+    {
+        var result = await _authService.RegisterAsync(request, cancellationToken);
+        return Ok(result);
+    }
 
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Login(
         LoginRequest request,
         CancellationToken cancellationToken)
-        => Ok(await authService.LoginAsync(request, cancellationToken));
+    {
+        var result = await _authService.LoginAsync(request, cancellationToken);
+        return Ok(result);
+    }
 
     [HttpGet("me")]
     [Authorize]
@@ -37,7 +50,7 @@ public class AuthController(IAuthService authService) : ControllerBase
                 "Authentication is required")));
         }
 
-        var user = await authService.GetCurrentUserAsync(userId.Value, cancellationToken);
+        var user = await _authService.GetCurrentUserAsync(userId.Value, cancellationToken);
         if (user is null)
         {
             return NotFound(new ErrorResponse(new ErrorDetails(
@@ -53,8 +66,11 @@ public class AuthController(IAuthService authService) : ControllerBase
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
-        return Guid.TryParse(userIdValue, out var userId)
-            ? userId
-            : null;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 }

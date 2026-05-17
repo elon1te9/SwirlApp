@@ -8,18 +8,25 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class LearningService(AppDbContext dbContext) : ILearningService
+public class LearningService : ILearningService
 {
     private const string LockedStatus = "locked";
     private const string AvailableStatus = "available";
     private const string CompletedStatus = "completed";
 
-    private static readonly HashSet<string> ChoiceExerciseTypes =
-    [
+    private static readonly HashSet<string> ChoiceExerciseTypes = new()
+    {
         "english_to_russian_choice",
         "russian_to_english_choice",
         "audio_to_russian_choice"
-    ];
+    };
+
+    private readonly AppDbContext _context;
+
+    public LearningService(AppDbContext context)
+    {
+        _context = context;
+    }
 
     public async Task<LevelSessionResponse> GetLevelSessionAsync(
         Guid userId,
@@ -56,20 +63,21 @@ public class LearningService(AppDbContext dbContext) : ILearningService
 
         var exercisesById = exercises.ToDictionary(exercise => exercise.Id);
         var now = CreateTimestamp();
-        var checkedAnswers = request.Answers
-            .Select(answer =>
-            {
-                var exercise = exercisesById[answer.ExerciseId];
-                var userAnswer = answer.UserAnswer ?? string.Empty;
-                var isCorrect = NormalizeAnswer(userAnswer) == NormalizeAnswer(exercise.CorrectAnswer);
+        var checkedAnswers = new List<CheckedAnswer>();
+        foreach (var answer in request.Answers)
+        {
+            var exercise = exercisesById[answer.ExerciseId];
+            var userAnswer = answer.UserAnswer ?? string.Empty;
+            var isCorrect = NormalizeAnswer(userAnswer) == NormalizeAnswer(exercise.CorrectAnswer);
 
-                return new CheckedAnswer(
-                    answer.ExerciseId,
-                    userAnswer,
-                    isCorrect,
-                    answer.TimeSpentMs);
-            })
-            .ToList();
+            checkedAnswers.Add(new CheckedAnswer
+            {
+                ExerciseId = answer.ExerciseId,
+                UserAnswer = userAnswer,
+                IsCorrect = isCorrect,
+                TimeSpentMs = answer.TimeSpentMs
+            });
+        }
 
         var mistakesCount = checkedAnswers.Count(answer => !answer.IsCorrect);
         var isSuccessful = mistakesCount == 0;
@@ -83,17 +91,20 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             MistakesCount = mistakesCount,
             IsSuccessful = isSuccessful
         };
-        dbContext.LevelAttempts.Add(attempt);
+        _context.LevelAttempts.Add(attempt);
 
-        dbContext.UserAnswers.AddRange(checkedAnswers.Select(answer => new UserAnswer
+        foreach (var answer in checkedAnswers)
         {
-            Attempt = attempt,
-            ExerciseId = answer.ExerciseId,
-            UserAnswerText = answer.UserAnswer,
-            IsCorrect = answer.IsCorrect,
-            AnsweredAt = now,
-            TimeSpentMs = answer.TimeSpentMs
-        }));
+            _context.UserAnswers.Add(new UserAnswer
+            {
+                Attempt = attempt,
+                ExerciseId = answer.ExerciseId,
+                UserAnswerText = answer.UserAnswer,
+                IsCorrect = answer.IsCorrect,
+                AnsweredAt = now,
+                TimeSpentMs = answer.TimeSpentMs
+            });
+        }
 
         var progress = await GetOrCreateLevelProgressAsync(userId, access.Level, access.Progress, now);
         progress.AttemptsCount++;
@@ -102,13 +113,17 @@ public class LearningService(AppDbContext dbContext) : ILearningService
         if (isSuccessful)
         {
             progress.Status = CompletedStatus;
-            progress.CompletedAt ??= now;
+            if (progress.CompletedAt is null)
+            {
+                progress.CompletedAt = now;
+            }
+
             openedNextLevelId = await UnlockNextLevelAsync(userId, access.Level, now, cancellationToken);
         }
 
         var profile = await UpdateStreakAsync(userId, cancellationToken);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new CompleteLevelResponse
         {
@@ -122,13 +137,17 @@ public class LearningService(AppDbContext dbContext) : ILearningService
 
     private static ExerciseResponse CreateExerciseResponse(Exercise exercise)
     {
-        var options = ChoiceExerciseTypes.Contains(exercise.Type)
-            ? ShuffleOptions(exercise.ExerciseOptions
+        var options = new List<string>();
+        if (ChoiceExerciseTypes.Contains(exercise.Type))
+        {
+            options = exercise.ExerciseOptions
                 .OrderBy(option => option.SortOrder)
                 .ThenBy(option => option.Id)
                 .Select(option => option.OptionText)
-                .ToList())
-            : [];
+                .ToList();
+
+            ShuffleOptions(options);
+        }
 
         return new ExerciseResponse
         {
@@ -151,7 +170,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
         int levelId,
         CancellationToken cancellationToken)
     {
-        var level = await dbContext.Levels
+        var level = await _context.Levels
             .Include(candidate => candidate.Section)
             .FirstOrDefaultAsync(
                 candidate =>
@@ -168,7 +187,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
                 "Resource not found");
         }
 
-        var progress = await dbContext.UserLevelProgresses
+        var progress = await _context.UserLevelProgresses
             .FirstOrDefaultAsync(
                 candidate => candidate.UserId == userId && candidate.LevelId == levelId,
                 cancellationToken);
@@ -182,19 +201,25 @@ public class LearningService(AppDbContext dbContext) : ILearningService
                 "This level is locked");
         }
 
-        return new LevelAccess(level, progress);
+        return new LevelAccess
+        {
+            Level = level,
+            Progress = progress
+        };
     }
 
     private async Task<List<Exercise>> GetActiveExercisesForLevelAsync(
         int levelId,
-        CancellationToken cancellationToken) =>
-        await dbContext.Exercises
+        CancellationToken cancellationToken)
+    {
+        return await _context.Exercises
             .Include(exercise => exercise.Word)
             .Include(exercise => exercise.ExerciseOptions)
             .Where(exercise => exercise.LevelId == levelId && exercise.IsActive)
             .OrderBy(exercise => exercise.SortOrder ?? int.MaxValue)
             .ThenBy(exercise => exercise.Id)
             .ToListAsync(cancellationToken);
+    }
 
     private static void ValidateAnswersBelongToLevel(
         CompleteLevelRequest request,
@@ -244,9 +269,9 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             AttemptsCount = 0,
             UnlockedAt = now
         };
-        dbContext.UserLevelProgresses.Add(createdProgress);
+        _context.UserLevelProgresses.Add(createdProgress);
 
-        return await Task.FromResult(createdProgress);
+        return createdProgress;
     }
 
     private async Task<int?> UnlockNextLevelAsync(
@@ -260,7 +285,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             return null;
         }
 
-        var sectionLevels = await dbContext.Levels
+        var sectionLevels = await _context.Levels
             .Where(level => level.SectionId == completedLevel.SectionId && level.IsActive)
             .OrderBy(level => level.SortOrder)
             .ToListAsync(cancellationToken);
@@ -289,7 +314,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
         }
 
         var normalLevelIds = normalLevels.Select(level => level.Id).ToArray();
-        var completedNormalLevelIds = await dbContext.UserLevelProgresses
+        var completedNormalLevelIds = await _context.UserLevelProgresses
             .Where(progress =>
                 progress.UserId == userId
                 && progress.Status == CompletedStatus
@@ -327,7 +352,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var progress = await dbContext.UserLevelProgresses
+        var progress = await _context.UserLevelProgresses
             .FirstOrDefaultAsync(
                 candidate => candidate.UserId == userId && candidate.LevelId == level.Id,
                 cancellationToken);
@@ -346,7 +371,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             AttemptsCount = 0,
             UnlockedAt = null
         };
-        dbContext.UserLevelProgresses.Add(progress);
+        _context.UserLevelProgresses.Add(progress);
 
         return progress;
     }
@@ -360,7 +385,7 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             return LockedStatus;
         }
 
-        var firstNormalLevelId = await dbContext.Levels
+        var firstNormalLevelId = await _context.Levels
             .Where(candidate =>
                 candidate.SectionId == level.SectionId
                 && candidate.IsActive
@@ -369,16 +394,19 @@ public class LearningService(AppDbContext dbContext) : ILearningService
             .Select(candidate => candidate.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return level.Id == firstNormalLevelId
-            ? AvailableStatus
-            : LockedStatus;
+        if (level.Id == firstNormalLevelId)
+        {
+            return AvailableStatus;
+        }
+
+        return LockedStatus;
     }
 
     private async Task<UserProfile> UpdateStreakAsync(
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var profile = await dbContext.UserProfiles
+        var profile = await _context.UserProfiles
             .SingleAsync(candidate => candidate.UserId == userId, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var yesterday = today.AddDays(-1);
@@ -413,27 +441,43 @@ public class LearningService(AppDbContext dbContext) : ILearningService
         return options;
     }
 
-    private static string NormalizeAnswer(string answer) =>
-        Regex.Replace(answer.Trim().ToLowerInvariant(), @"\s+", " ");
+    private static string NormalizeAnswer(string answer)
+    {
+        return Regex.Replace(answer.Trim().ToLowerInvariant(), @"\s+", " ");
+    }
 
-    private static ApiException CreateValidationException(string field, string message) =>
-        new(
+    private static ApiException CreateValidationException(string field, string message)
+    {
+        return new ApiException(
             StatusCodes.Status400BadRequest,
             "validation_error",
             "Validation failed",
             new Dictionary<string, string[]>
             {
-                [field] = [message]
+                [field] = new[] { message }
             });
+    }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 
-    private sealed record LevelAccess(Level Level, UserLevelProgress? Progress);
+    private class LevelAccess
+    {
+        public Level Level { get; set; } = null!;
 
-    private sealed record CheckedAnswer(
-        int ExerciseId,
-        string UserAnswer,
-        bool IsCorrect,
-        int? TimeSpentMs);
+        public UserLevelProgress? Progress { get; set; }
+    }
+
+    private class CheckedAnswer
+    {
+        public int ExerciseId { get; set; }
+
+        public string UserAnswer { get; set; } = string.Empty;
+
+        public bool IsCorrect { get; set; }
+
+        public int? TimeSpentMs { get; set; }
+    }
 }

@@ -7,11 +7,17 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class WordLearningService(AppDbContext dbContext) : IWordLearningService
+public class WordLearningService : IWordLearningService
 {
     private const string LockedStatus = "locked";
     private const string AvailableStatus = "available";
-    private const string CompletedStatus = "completed";
+
+    private readonly AppDbContext _context;
+
+    public WordLearningService(AppDbContext context)
+    {
+        _context = context;
+    }
 
     public async Task<List<WordResponse>> GetLevelWordsAsync(
         Guid userId,
@@ -22,10 +28,10 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
 
         if (access.Level.IsFinalTest)
         {
-            return [];
+            return new List<WordResponse>();
         }
 
-        return await dbContext.Words
+        return await _context.Words
             .Where(word => word.LevelId == levelId && word.IsActive)
             .OrderBy(word => word.Id)
             .Select(word => new WordResponse
@@ -63,7 +69,7 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
             throw CreateValidationException("levelId", "Final tests do not introduce new words");
         }
 
-        var activeWordIds = await dbContext.Words
+        var activeWordIds = await _context.Words
             .Where(word => word.LevelId == levelId && word.IsActive)
             .OrderBy(word => word.Id)
             .Select(word => word.Id)
@@ -80,7 +86,7 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
             throw CreateValidationException("wordIds", "All active level words must be marked as learned");
         }
 
-        var existingLearnedWordIds = await dbContext.UserWordProgresses
+        var existingLearnedWordIds = await _context.UserWordProgresses
             .Where(progress =>
                 progress.UserId == userId
                 && activeWordIds.Contains(progress.WordId))
@@ -90,14 +96,20 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
         var existingLearnedWordIdsSet = existingLearnedWordIds.ToHashSet();
         var now = CreateTimestamp();
 
-        dbContext.UserWordProgresses.AddRange(activeWordIds
-            .Where(wordId => !existingLearnedWordIdsSet.Contains(wordId))
-            .Select(wordId => new UserWordProgress
+        foreach (var wordId in activeWordIds)
+        {
+            if (existingLearnedWordIdsSet.Contains(wordId))
+            {
+                continue;
+            }
+
+            _context.UserWordProgresses.Add(new UserWordProgress
             {
                 UserId = userId,
                 WordId = wordId,
                 LearnedAt = now
-            }));
+            });
+        }
 
         var levelProgress = access.Progress;
         if (levelProgress is null)
@@ -111,14 +123,14 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
                 AttemptsCount = 0,
                 UnlockedAt = now
             };
-            dbContext.UserLevelProgresses.Add(levelProgress);
+            _context.UserLevelProgresses.Add(levelProgress);
         }
         else
         {
             levelProgress.WordsLearned = true;
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new MarkLevelWordsLearnedResponse
         {
@@ -133,7 +145,7 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
         int levelId,
         CancellationToken cancellationToken)
     {
-        var level = await dbContext.Levels
+        var level = await _context.Levels
             .Include(candidate => candidate.Section)
             .FirstOrDefaultAsync(
                 candidate =>
@@ -150,7 +162,7 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
                 "Resource not found");
         }
 
-        var progress = await dbContext.UserLevelProgresses
+        var progress = await _context.UserLevelProgresses
             .FirstOrDefaultAsync(
                 candidate => candidate.UserId == userId && candidate.LevelId == levelId,
                 cancellationToken);
@@ -164,7 +176,11 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
                 "This level is locked");
         }
 
-        return new LevelAccess(level, progress);
+        return new LevelAccess
+        {
+            Level = level,
+            Progress = progress
+        };
     }
 
     private async Task<string> GetFallbackLevelStatusAsync(
@@ -176,7 +192,7 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
             return LockedStatus;
         }
 
-        var firstNormalLevelId = await dbContext.Levels
+        var firstNormalLevelId = await _context.Levels
             .Where(candidate =>
                 candidate.SectionId == level.SectionId
                 && candidate.IsActive
@@ -185,23 +201,35 @@ public class WordLearningService(AppDbContext dbContext) : IWordLearningService
             .Select(candidate => candidate.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return level.Id == firstNormalLevelId
-            ? AvailableStatus
-            : LockedStatus;
+        if (level.Id == firstNormalLevelId)
+        {
+            return AvailableStatus;
+        }
+
+        return LockedStatus;
     }
 
-    private static ApiException CreateValidationException(string field, string message) =>
-        new(
+    private static ApiException CreateValidationException(string field, string message)
+    {
+        return new ApiException(
             StatusCodes.Status400BadRequest,
             "validation_error",
             "Validation failed",
             new Dictionary<string, string[]>
             {
-                [field] = [message]
+                [field] = new[] { message }
             });
+    }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 
-    private sealed record LevelAccess(Level Level, UserLevelProgress? Progress);
+    private class LevelAccess
+    {
+        public Level Level { get; set; } = null!;
+
+        public UserLevelProgress? Progress { get; set; }
+    }
 }

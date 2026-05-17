@@ -15,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 const string FlutterDevelopmentCorsPolicy = "FlutterDevelopment";
 
-var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 var mediaRootPathSetting = builder.Configuration["Media:RootPath"] ?? "wwwroot/media";
 var mediaRequestPath = builder.Configuration["Media:RequestPath"] ?? "/media";
 var mediaRootPath = Path.Combine(builder.Environment.ContentRootPath, mediaRootPathSetting);
@@ -65,7 +65,7 @@ builder.Services.AddSwaggerGen(options =>
                     Id = "Bearer"
                 }
             },
-            []
+            Array.Empty<string>()
         }
     });
 });
@@ -169,15 +169,19 @@ app.UseExceptionHandler(errorApp =>
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("ApiExceptionHandler");
 
-        var (statusCode, error) = exception switch
+        int statusCode;
+        ErrorDetails error;
+
+        if (exception is ApiException apiException)
         {
-            ApiException apiException => (
-                apiException.StatusCode,
-                new ErrorDetails(apiException.Code, apiException.Message, apiException.Details)),
-            _ => (
-                StatusCodes.Status500InternalServerError,
-                new ErrorDetails("internal_error", "Something went wrong"))
-        };
+            statusCode = apiException.StatusCode;
+            error = new ErrorDetails(apiException.Code, apiException.Message, apiException.Details);
+        }
+        else
+        {
+            statusCode = StatusCodes.Status500InternalServerError;
+            error = new ErrorDetails("internal_error", "Something went wrong");
+        }
 
         if (exception is not null and not ApiException)
         {
@@ -205,10 +209,12 @@ app.MapControllers();
 
 app.Run();
 
-static string ToCamelCaseModelStateKey(string value) =>
-    string.Join('.', value
+static string ToCamelCaseModelStateKey(string value)
+{
+    return string.Join('.', value
         .Split('.', StringSplitOptions.RemoveEmptyEntries)
         .Select(ToCamelCaseModelStateSegment));
+}
 
 static string ToCamelCaseModelStateSegment(string value)
 {
@@ -221,7 +227,12 @@ static string ToCamelCaseModelStateSegment(string value)
     return ToCamelCase(value[..bracketIndex]) + value[bracketIndex..];
 }
 
-static string ToCamelCase(string value) =>
-    string.IsNullOrWhiteSpace(value)
-        ? value
-        : char.ToLowerInvariant(value[0]) + value[1..];
+static string ToCamelCase(string value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return value;
+    }
+
+    return char.ToLowerInvariant(value[0]) + value[1..];
+}

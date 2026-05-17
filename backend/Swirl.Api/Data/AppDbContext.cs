@@ -3,35 +3,39 @@ using Swirl.Api.Models;
 
 namespace Swirl.Api.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext : DbContext
 {
-    public DbSet<User> Users => Set<User>();
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    {
+    }
 
-    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<User> Users { get; set; } = null!;
 
-    public DbSet<Avatar> Avatars => Set<Avatar>();
+    public DbSet<UserProfile> UserProfiles { get; set; } = null!;
 
-    public DbSet<Section> Sections => Set<Section>();
+    public DbSet<Avatar> Avatars { get; set; } = null!;
 
-    public DbSet<Level> Levels => Set<Level>();
+    public DbSet<Section> Sections { get; set; } = null!;
 
-    public DbSet<Word> Words => Set<Word>();
+    public DbSet<Level> Levels { get; set; } = null!;
 
-    public DbSet<Exercise> Exercises => Set<Exercise>();
+    public DbSet<Word> Words { get; set; } = null!;
 
-    public DbSet<ExerciseOption> ExerciseOptions => Set<ExerciseOption>();
+    public DbSet<Exercise> Exercises { get; set; } = null!;
 
-    public DbSet<UserLevelProgress> UserLevelProgresses => Set<UserLevelProgress>();
+    public DbSet<ExerciseOption> ExerciseOptions { get; set; } = null!;
 
-    public DbSet<UserWordProgress> UserWordProgresses => Set<UserWordProgress>();
+    public DbSet<UserLevelProgress> UserLevelProgresses { get; set; } = null!;
 
-    public DbSet<LevelAttempt> LevelAttempts => Set<LevelAttempt>();
+    public DbSet<UserWordProgress> UserWordProgresses { get; set; } = null!;
 
-    public DbSet<UserAnswer> UserAnswers => Set<UserAnswer>();
+    public DbSet<LevelAttempt> LevelAttempts { get; set; } = null!;
 
-    public DbSet<DailyTest> DailyTests => Set<DailyTest>();
+    public DbSet<UserAnswer> UserAnswers { get; set; } = null!;
 
-    public DbSet<DailyTestAnswer> DailyTestAnswers => Set<DailyTestAnswer>();
+    public DbSet<DailyTest> DailyTests { get; set; } = null!;
+
+    public DbSet<DailyTestAnswer> DailyTestAnswers { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

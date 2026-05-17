@@ -5,13 +5,20 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class StreakService(AppDbContext dbContext) : IStreakService
+public class StreakService : IStreakService
 {
+    private readonly AppDbContext _context;
+
+    public StreakService(AppDbContext context)
+    {
+        _context = context;
+    }
+
     public async Task<StreakResponse> UpdateLearningActivityAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var profile = await dbContext.UserProfiles
+        var profile = await _context.UserProfiles
             .FirstOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken);
 
         if (profile is null)
@@ -42,7 +49,7 @@ public class StreakService(AppDbContext dbContext) : IStreakService
         profile.BestStreak = Math.Max(profile.BestStreak, profile.CurrentStreak);
         profile.UpdatedAt = CreateTimestamp();
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new StreakResponse
         {
@@ -51,6 +58,8 @@ public class StreakService(AppDbContext dbContext) : IStreakService
         };
     }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 }

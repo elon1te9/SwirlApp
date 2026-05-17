@@ -10,8 +10,15 @@ namespace Swirl.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/daily-test")]
-public class DailyTestController(IDailyTestService dailyTestService) : ControllerBase
+public class DailyTestController : ControllerBase
 {
+    private readonly IDailyTestService _dailyTestService;
+
+    public DailyTestController(IDailyTestService dailyTestService)
+    {
+        _dailyTestService = dailyTestService;
+    }
+
     [HttpGet]
     public async Task<ActionResult<DailyTestResponse>> GetDailyTest(CancellationToken cancellationToken)
     {
@@ -21,7 +28,8 @@ public class DailyTestController(IDailyTestService dailyTestService) : Controlle
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await dailyTestService.GetDailyTestAsync(userId.Value, cancellationToken));
+        var dailyTest = await _dailyTestService.GetDailyTestAsync(userId.Value, cancellationToken);
+        return Ok(dailyTest);
     }
 
     [HttpPost("complete")]
@@ -35,10 +43,12 @@ public class DailyTestController(IDailyTestService dailyTestService) : Controlle
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await dailyTestService.CompleteDailyTestAsync(
+        var result = await _dailyTestService.CompleteDailyTestAsync(
             userId.Value,
             request,
-            cancellationToken));
+            cancellationToken);
+
+        return Ok(result);
     }
 
     private Guid? GetCurrentUserId()
@@ -46,13 +56,18 @@ public class DailyTestController(IDailyTestService dailyTestService) : Controlle
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
-        return Guid.TryParse(userIdValue, out var userId)
-            ? userId
-            : null;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 
-    private static UnauthorizedObjectResult CreateUnauthorizedResult() =>
-        new(new ErrorResponse(new ErrorDetails(
+    private static UnauthorizedObjectResult CreateUnauthorizedResult()
+    {
+        return new UnauthorizedObjectResult(new ErrorResponse(new ErrorDetails(
             "unauthorized",
             "Authentication is required")));
+    }
 }

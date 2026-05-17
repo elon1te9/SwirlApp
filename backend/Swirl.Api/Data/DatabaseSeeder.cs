@@ -11,21 +11,21 @@ public static class DatabaseSeeder
     private const int FinalTestExerciseCount = 30;
 
     private static readonly string[] ExerciseTypes =
-    [
+    {
         "picture_to_english_input",
         "english_to_russian_choice",
         "russian_to_english_choice",
         "russian_to_english_input",
         "english_to_russian_input",
         "audio_to_russian_choice"
-    ];
+    };
 
     private static readonly string[] ChoiceExerciseTypes =
-    [
+    {
         "english_to_russian_choice",
         "russian_to_english_choice",
         "audio_to_russian_choice"
-    ];
+    };
 
     public static async Task SeedAsync(AppDbContext dbContext, CancellationToken cancellationToken = default)
     {
@@ -454,7 +454,7 @@ public static class DatabaseSeeder
     {
         if (words.Length == 0)
         {
-            return [];
+            return Array.Empty<ExerciseSeed>();
         }
 
         return Enumerable.Range(1, exerciseCount)
@@ -474,31 +474,54 @@ public static class DatabaseSeeder
             .ToArray();
     }
 
-    private static Word[] SelectFinalTestWords(Word[] sectionWords) =>
-        Enumerable.Range(0, FinalTestExerciseCount)
+    private static Word[] SelectFinalTestWords(Word[] sectionWords)
+    {
+        return Enumerable.Range(0, FinalTestExerciseCount)
             .Select(index => sectionWords[(index * 7) % sectionWords.Length])
             .ToArray();
+    }
 
-    private static string? CreateQuestionText(string type, Word word) =>
-        type switch
+    private static string? CreateQuestionText(string type, Word word)
+    {
+        if (type == "picture_to_english_input")
         {
-            "picture_to_english_input" => null,
-            "english_to_russian_choice" => word.English,
-            "russian_to_english_choice" => word.Russian,
-            "russian_to_english_input" => word.Russian,
-            "english_to_russian_input" => word.English,
-            "audio_to_russian_choice" => null,
-            _ => word.English
-        };
+            return null;
+        }
 
-    private static string CreateCorrectAnswer(string type, Word word) =>
-        type switch
+        if (type == "english_to_russian_choice")
         {
-            "english_to_russian_choice" => word.Russian,
-            "english_to_russian_input" => word.Russian,
-            "audio_to_russian_choice" => word.Russian,
-            _ => word.English
-        };
+            return word.English;
+        }
+
+        if (type == "russian_to_english_choice" || type == "russian_to_english_input")
+        {
+            return word.Russian;
+        }
+
+        if (type == "english_to_russian_input")
+        {
+            return word.English;
+        }
+
+        if (type == "audio_to_russian_choice")
+        {
+            return null;
+        }
+
+        return word.English;
+    }
+
+    private static string CreateCorrectAnswer(string type, Word word)
+    {
+        if (type == "english_to_russian_choice"
+            || type == "english_to_russian_input"
+            || type == "audio_to_russian_choice")
+        {
+            return word.Russian;
+        }
+
+        return word.English;
+    }
 
     private static string[] CreateOptionTexts(Exercise exercise, List<Word> sectionWords)
     {
@@ -515,19 +538,28 @@ public static class DatabaseSeeder
             .Take(3)
             .ToArray();
 
-        return [correctAnswer, .. incorrectOptions];
+        var options = new List<string>();
+        options.Add(correctAnswer);
+        options.AddRange(incorrectOptions);
+
+        return options.ToArray();
     }
 
-    private static SectionSeed[] GetSectionSeeds() =>
-    [
+    private static SectionSeed[] GetSectionSeeds()
+    {
+        return new SectionSeed[]
+        {
         new("Food", "Words about food, drinks, cooking, taste, and nutrition", "/media/images/sections/food.png", 1),
         new("Science", "Words about science, nature, laboratory work, and research", "/media/images/sections/science.png", 2),
         new("Health", "Words about the body, symptoms, medicine, and healthy habits", "/media/images/sections/health.png", 3),
         new("Wardrobe", "Words about clothes, shoes, accessories, materials, and style", "/media/images/sections/wardrobe.png", 4)
-    ];
+        };
+    }
 
-    private static WordSeed[] GetWordSeeds() =>
-    [
+    private static WordSeed[] GetWordSeeds()
+    {
+        return new WordSeed[]
+        {
         new("Food", 1, "apple", "яблоко", "/ˈæpəl/", "noun"),
         new("Food", 1, "bread", "хлеб", "/bred/", "noun"),
         new("Food", 1, "milk", "молоко", "/mɪlk/", "noun"),
@@ -731,80 +763,189 @@ public static class DatabaseSeeder
         new("Wardrobe", 5, "collar", "воротник", "/ˈkɑːlər/", "noun"),
         new("Wardrobe", 5, "tailor", "портной", "/ˈteɪlər/", "noun"),
         new("Wardrobe", 5, "alter", "перешивать", "/ˈɔːltər/", "verb")
-    ];
-
-    private static string GetLevelCefrLevel(int levelNumber) =>
-        levelNumber switch
-        {
-            1 or 2 => "A1",
-            3 => "A2",
-            4 => "A2/B1",
-            5 => "B1/B2",
-            _ => "mixed"
         };
-
-    private static string GetLevelDescription(string sectionTitle, int levelNumber) =>
-        (sectionTitle, levelNumber) switch
-        {
-            ("Food", 1) => "Simple food and drink words",
-            ("Food", 2) => "Fruit, vegetables, and basic products",
-            ("Food", 3) => "Dishes and cooking actions",
-            ("Food", 4) => "Taste, kitchen, and nutrition words",
-            ("Food", 5) => "More advanced food vocabulary",
-            ("Science", 1) => "Simple science words",
-            ("Science", 2) => "Nature, weather, and measurements",
-            ("Science", 3) => "Laboratory and material words",
-            ("Science", 4) => "Physics, chemistry, and biology words",
-            ("Science", 5) => "More advanced science terms",
-            ("Health", 1) => "Body and basic health words",
-            ("Health", 2) => "Symptoms and simple health actions",
-            ("Health", 3) => "Medicine, doctors, and clinics",
-            ("Health", 4) => "Treatment and prevention words",
-            ("Health", 5) => "More advanced health vocabulary",
-            ("Wardrobe", 1) => "Basic clothing words",
-            ("Wardrobe", 2) => "Shoes and accessories",
-            ("Wardrobe", 3) => "Materials and styles",
-            ("Wardrobe", 4) => "Clothes for different situations",
-            ("Wardrobe", 5) => "More advanced fashion and clothing vocabulary",
-            _ => $"Level {levelNumber} for {sectionTitle} section"
-        };
-
-    private static string CreateWordKey(string sectionTitle, int levelNumber, string english) =>
-        $"{sectionTitle}|{levelNumber}|{english}".ToLowerInvariant();
-
-    private static string CreateExerciseKey(int levelId, int sortOrder) =>
-        $"{levelId}|{sortOrder}";
-
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-
-    private sealed record AvatarSeed(string Name, string ImageUrl);
-
-    private sealed record SectionSeed(string Title, string Description, string ImageUrl, int SortOrder);
-
-    private sealed record WordSeed(
-        string SectionTitle,
-        int LevelNumber,
-        string English,
-        string Russian,
-        string Transcription,
-        string PartOfSpeech)
-    {
-        public string CefrLevel => GetLevelCefrLevel(LevelNumber);
-
-        public string ImageUrl => $"/media/images/words/{CreateSlug(SectionTitle)}/{CreateSlug(English)}.png";
-
-        public string AudioUrl => $"/media/audio/words/{CreateSlug(SectionTitle)}/{CreateSlug(English)}.mp3";
-
-        private static string CreateSlug(string value) =>
-            value.ToLowerInvariant().Replace(' ', '-');
     }
 
-    private sealed record ExerciseSeed(
-        int LevelId,
-        int WordId,
-        string Type,
-        string? QuestionText,
-        string CorrectAnswer,
-        int SortOrder);
+    private static string GetLevelCefrLevel(int levelNumber)
+    {
+        if (levelNumber == 1 || levelNumber == 2)
+        {
+            return "A1";
+        }
+
+        if (levelNumber == 3)
+        {
+            return "A2";
+        }
+
+        if (levelNumber == 4)
+        {
+            return "A2/B1";
+        }
+
+        if (levelNumber == 5)
+        {
+            return "B1/B2";
+        }
+
+        return "mixed";
+    }
+
+    private static string GetLevelDescription(string sectionTitle, int levelNumber)
+    {
+        if (sectionTitle == "Food" && levelNumber == 1) return "Simple food and drink words";
+        if (sectionTitle == "Food" && levelNumber == 2) return "Fruit, vegetables, and basic products";
+        if (sectionTitle == "Food" && levelNumber == 3) return "Dishes and cooking actions";
+        if (sectionTitle == "Food" && levelNumber == 4) return "Taste, kitchen, and nutrition words";
+        if (sectionTitle == "Food" && levelNumber == 5) return "More advanced food vocabulary";
+
+        if (sectionTitle == "Science" && levelNumber == 1) return "Simple science words";
+        if (sectionTitle == "Science" && levelNumber == 2) return "Nature, weather, and measurements";
+        if (sectionTitle == "Science" && levelNumber == 3) return "Laboratory and material words";
+        if (sectionTitle == "Science" && levelNumber == 4) return "Physics, chemistry, and biology words";
+        if (sectionTitle == "Science" && levelNumber == 5) return "More advanced science terms";
+
+        if (sectionTitle == "Health" && levelNumber == 1) return "Body and basic health words";
+        if (sectionTitle == "Health" && levelNumber == 2) return "Symptoms and simple health actions";
+        if (sectionTitle == "Health" && levelNumber == 3) return "Medicine, doctors, and clinics";
+        if (sectionTitle == "Health" && levelNumber == 4) return "Treatment and prevention words";
+        if (sectionTitle == "Health" && levelNumber == 5) return "More advanced health vocabulary";
+
+        if (sectionTitle == "Wardrobe" && levelNumber == 1) return "Basic clothing words";
+        if (sectionTitle == "Wardrobe" && levelNumber == 2) return "Shoes and accessories";
+        if (sectionTitle == "Wardrobe" && levelNumber == 3) return "Materials and styles";
+        if (sectionTitle == "Wardrobe" && levelNumber == 4) return "Clothes for different situations";
+        if (sectionTitle == "Wardrobe" && levelNumber == 5) return "More advanced fashion and clothing vocabulary";
+
+        return $"Level {levelNumber} for {sectionTitle} section";
+    }
+
+    private static string CreateWordKey(string sectionTitle, int levelNumber, string english)
+    {
+        return $"{sectionTitle}|{levelNumber}|{english}".ToLowerInvariant();
+    }
+
+    private static string CreateExerciseKey(int levelId, int sortOrder)
+    {
+        return $"{levelId}|{sortOrder}";
+    }
+
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
+
+    private class AvatarSeed
+    {
+        public AvatarSeed(string name, string imageUrl)
+        {
+            Name = name;
+            ImageUrl = imageUrl;
+        }
+
+        public string Name { get; }
+
+        public string ImageUrl { get; }
+    }
+
+    private class SectionSeed
+    {
+        public SectionSeed(string title, string description, string imageUrl, int sortOrder)
+        {
+            Title = title;
+            Description = description;
+            ImageUrl = imageUrl;
+            SortOrder = sortOrder;
+        }
+
+        public string Title { get; }
+
+        public string Description { get; }
+
+        public string ImageUrl { get; }
+
+        public int SortOrder { get; }
+    }
+
+    private class WordSeed
+    {
+        public WordSeed(
+            string sectionTitle,
+            int levelNumber,
+            string english,
+            string russian,
+            string transcription,
+            string partOfSpeech)
+        {
+            SectionTitle = sectionTitle;
+            LevelNumber = levelNumber;
+            English = english;
+            Russian = russian;
+            Transcription = transcription;
+            PartOfSpeech = partOfSpeech;
+        }
+
+        public string SectionTitle { get; }
+
+        public int LevelNumber { get; }
+
+        public string English { get; }
+
+        public string Russian { get; }
+
+        public string Transcription { get; }
+
+        public string PartOfSpeech { get; }
+
+        public string CefrLevel
+        {
+            get { return GetLevelCefrLevel(LevelNumber); }
+        }
+
+        public string ImageUrl
+        {
+            get { return $"/media/images/words/{CreateSlug(SectionTitle)}/{CreateSlug(English)}.png"; }
+        }
+
+        public string AudioUrl
+        {
+            get { return $"/media/audio/words/{CreateSlug(SectionTitle)}/{CreateSlug(English)}.mp3"; }
+        }
+
+        private static string CreateSlug(string value)
+        {
+            return value.ToLowerInvariant().Replace(' ', '-');
+        }
+    }
+
+    private class ExerciseSeed
+    {
+        public ExerciseSeed(
+            int levelId,
+            int wordId,
+            string type,
+            string? questionText,
+            string correctAnswer,
+            int sortOrder)
+        {
+            LevelId = levelId;
+            WordId = wordId;
+            Type = type;
+            QuestionText = questionText;
+            CorrectAnswer = correctAnswer;
+            SortOrder = sortOrder;
+        }
+
+        public int LevelId { get; }
+
+        public int WordId { get; }
+
+        public string Type { get; }
+
+        public string? QuestionText { get; }
+
+        public string CorrectAnswer { get; }
+
+        public int SortOrder { get; }
+    }
 }

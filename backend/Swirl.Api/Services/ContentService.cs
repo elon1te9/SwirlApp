@@ -6,17 +6,24 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class ContentService(AppDbContext dbContext) : IContentService
+public class ContentService : IContentService
 {
     private const string LockedStatus = "locked";
     private const string AvailableStatus = "available";
     private const string CompletedStatus = "completed";
 
+    private readonly AppDbContext _context;
+
+    public ContentService(AppDbContext context)
+    {
+        _context = context;
+    }
+
     public async Task<List<SectionResponse>> GetSectionsAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var sections = await dbContext.Sections
+        var sections = await _context.Sections
             .Include(section => section.Levels)
             .Where(section => section.IsActive)
             .OrderBy(section => section.SortOrder)
@@ -28,7 +35,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
             .Select(level => level.Id)
             .ToArray();
 
-        var completedLevelIds = await dbContext.UserLevelProgresses
+        var completedLevelIds = await _context.UserLevelProgresses
             .Where(progress =>
                 progress.UserId == userId
                 && progress.Status == CompletedStatus
@@ -38,9 +45,13 @@ public class ContentService(AppDbContext dbContext) : IContentService
 
         var completedLevelIdsSet = completedLevelIds.ToHashSet();
 
-        return sections
-            .Select(section => CreateSectionResponse(section, completedLevelIdsSet))
-            .ToList();
+        var result = new List<SectionResponse>();
+        foreach (var section in sections)
+        {
+            result.Add(CreateSectionResponse(section, completedLevelIdsSet));
+        }
+
+        return result;
     }
 
     public async Task<SectionResponse?> GetSectionAsync(
@@ -48,7 +59,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
         int sectionId,
         CancellationToken cancellationToken = default)
     {
-        var section = await dbContext.Sections
+        var section = await _context.Sections
             .Include(candidate => candidate.Levels)
             .FirstOrDefaultAsync(
                 candidate => candidate.Id == sectionId && candidate.IsActive,
@@ -64,7 +75,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
             .Select(level => level.Id)
             .ToArray();
 
-        var completedLevelIds = await dbContext.UserLevelProgresses
+        var completedLevelIds = await _context.UserLevelProgresses
             .Where(progress =>
                 progress.UserId == userId
                 && progress.Status == CompletedStatus
@@ -80,7 +91,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
         int sectionId,
         CancellationToken cancellationToken = default)
     {
-        var sectionExists = await dbContext.Sections
+        var sectionExists = await _context.Sections
             .AnyAsync(section => section.Id == sectionId && section.IsActive, cancellationToken);
 
         if (!sectionExists)
@@ -88,7 +99,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
             return null;
         }
 
-        var levels = await dbContext.Levels
+        var levels = await _context.Levels
             .Include(level => level.Words)
             .Include(level => level.Exercises)
             .Where(level => level.SectionId == sectionId && level.IsActive)
@@ -97,9 +108,13 @@ public class ContentService(AppDbContext dbContext) : IContentService
 
         var progressByLevelId = await GetProgressByLevelIdAsync(userId, levels, cancellationToken);
 
-        return levels
-            .Select(level => CreateLevelResponse(level, progressByLevelId, levels))
-            .ToList();
+        var result = new List<LevelResponse>();
+        foreach (var level in levels)
+        {
+            result.Add(CreateLevelResponse(level, progressByLevelId, levels));
+        }
+
+        return result;
     }
 
     public async Task<LevelDetailsResponse?> GetLevelAsync(
@@ -107,7 +122,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
         int levelId,
         CancellationToken cancellationToken = default)
     {
-        var level = await dbContext.Levels
+        var level = await _context.Levels
             .Include(candidate => candidate.Section)
             .Include(candidate => candidate.Words)
             .Include(candidate => candidate.Exercises)
@@ -123,13 +138,13 @@ public class ContentService(AppDbContext dbContext) : IContentService
             return null;
         }
 
-        var sectionLevels = await dbContext.Levels
+        var sectionLevels = await _context.Levels
             .Where(candidate => candidate.SectionId == level.SectionId && candidate.IsActive)
             .OrderBy(candidate => candidate.SortOrder)
             .ToListAsync(cancellationToken);
 
         var progressByLevelId = await GetProgressByLevelIdAsync(userId, sectionLevels, cancellationToken);
-        var progress = progressByLevelId.GetValueOrDefault(level.Id);
+        progressByLevelId.TryGetValue(level.Id, out var progress);
 
         return new LevelDetailsResponse
         {
@@ -176,8 +191,11 @@ public class ContentService(AppDbContext dbContext) : IContentService
     private static LevelResponse CreateLevelResponse(
         Level level,
         Dictionary<int, UserLevelProgress> progressByLevelId,
-        List<Level> sectionLevels) =>
-        new()
+        List<Level> sectionLevels)
+    {
+        progressByLevelId.TryGetValue(level.Id, out var progress);
+
+        return new LevelResponse
         {
             Id = level.Id,
             SectionId = level.SectionId,
@@ -188,8 +206,9 @@ public class ContentService(AppDbContext dbContext) : IContentService
             WordsCount = level.Words.Count(word => word.IsActive),
             ExercisesCount = level.Exercises.Count(exercise => exercise.IsActive),
             IsFinalTest = level.IsFinalTest,
-            Status = GetLevelStatus(level, progressByLevelId.GetValueOrDefault(level.Id), sectionLevels)
+            Status = GetLevelStatus(level, progress, sectionLevels)
         };
+    }
 
     private async Task<Dictionary<int, UserLevelProgress>> GetProgressByLevelIdAsync(
         Guid userId,
@@ -198,7 +217,7 @@ public class ContentService(AppDbContext dbContext) : IContentService
     {
         var levelIds = levels.Select(level => level.Id).ToArray();
 
-        return await dbContext.UserLevelProgresses
+        return await _context.UserLevelProgresses
             .Where(progress => progress.UserId == userId && levelIds.Contains(progress.LevelId))
             .ToDictionaryAsync(progress => progress.LevelId, cancellationToken);
     }
@@ -219,8 +238,11 @@ public class ContentService(AppDbContext dbContext) : IContentService
             .Select(candidate => candidate.Id)
             .FirstOrDefault();
 
-        return !level.IsFinalTest && level.Id == firstNormalLevelId
-            ? AvailableStatus
-            : LockedStatus;
+        if (!level.IsFinalTest && level.Id == firstNormalLevelId)
+        {
+            return AvailableStatus;
+        }
+
+        return LockedStatus;
     }
 }

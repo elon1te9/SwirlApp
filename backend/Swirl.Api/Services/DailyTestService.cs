@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Swirl.Api.Data;
 using Swirl.Api.Interfaces;
@@ -8,26 +7,33 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public partial class DailyTestService(
-    AppDbContext dbContext,
-    IStreakService streakService) : IDailyTestService
+public class DailyTestService : IDailyTestService
 {
     private const int MinimumLearnedWords = 5;
     private const int MaximumQuestions = 30;
 
     private static readonly string[] ExerciseTypes =
-    [
+    {
         "english_to_russian_choice",
         "russian_to_english_choice",
         "russian_to_english_input",
         "english_to_russian_input"
-    ];
+    };
 
     private static readonly string[] ChoiceExerciseTypes =
-    [
+    {
         "english_to_russian_choice",
         "russian_to_english_choice"
-    ];
+    };
+
+    private readonly AppDbContext _context;
+    private readonly IStreakService _streakService;
+
+    public DailyTestService(AppDbContext context, IStreakService streakService)
+    {
+        _context = context;
+        _streakService = streakService;
+    }
 
     public async Task<DailyTestResponse> GetDailyTestAsync(
         Guid userId,
@@ -88,7 +94,7 @@ public partial class DailyTestService(
                 "Learn more words to unlock the daily test");
         }
 
-        var existingCompletedTest = await dbContext.DailyTests
+        var existingCompletedTest = await _context.DailyTests
             .AnyAsync(
                 candidate =>
                     candidate.UserId == userId
@@ -131,21 +137,23 @@ public partial class DailyTestService(
         }
 
         var now = CreateTimestamp();
-        var checkedAnswers = request.Answers
-            .Select(answer =>
+        var checkedAnswers = new List<CheckedDailyTestAnswer>();
+        foreach (var answer in request.Answers)
+        {
+            var word = learnedWordsById[answer.WordId];
+            var correctAnswer = GetCorrectAnswer(answer.ExerciseType, word);
+            var userAnswer = answer.UserAnswer ?? string.Empty;
+
+            checkedAnswers.Add(new CheckedDailyTestAnswer
             {
-                var word = learnedWordsById[answer.WordId];
-                var correctAnswer = GetCorrectAnswer(answer.ExerciseType, word);
+                WordId = answer.WordId,
+                ExerciseType = answer.ExerciseType,
+                UserAnswer = userAnswer,
+                IsCorrect = Normalize(userAnswer) == Normalize(correctAnswer)
+            });
+        }
 
-                return new CheckedDailyTestAnswer(
-                    answer.WordId,
-                    answer.ExerciseType,
-                    answer.UserAnswer ?? string.Empty,
-                    Normalize(answer.UserAnswer) == Normalize(correctAnswer));
-            })
-            .ToList();
-
-        var dailyTest = await dbContext.DailyTests
+        var dailyTest = await _context.DailyTests
             .Include(candidate => candidate.DailyTestAnswers)
             .FirstOrDefaultAsync(
                 candidate => candidate.UserId == userId && candidate.TestDate == today,
@@ -159,11 +167,11 @@ public partial class DailyTestService(
                 TestDate = today,
                 StartedAt = now
             };
-            dbContext.DailyTests.Add(dailyTest);
+            _context.DailyTests.Add(dailyTest);
         }
         else
         {
-            dbContext.DailyTestAnswers.RemoveRange(dailyTest.DailyTestAnswers);
+            _context.DailyTestAnswers.RemoveRange(dailyTest.DailyTestAnswers);
         }
 
         dailyTest.CompletedAt = now;
@@ -171,8 +179,10 @@ public partial class DailyTestService(
         dailyTest.CorrectAnswers = checkedAnswers.Count(answer => answer.IsCorrect);
         dailyTest.IsCompleted = true;
 
-        dailyTest.DailyTestAnswers = checkedAnswers
-            .Select(answer => new DailyTestAnswer
+        dailyTest.DailyTestAnswers = new List<DailyTestAnswer>();
+        foreach (var answer in checkedAnswers)
+        {
+            dailyTest.DailyTestAnswers.Add(new DailyTestAnswer
             {
                 DailyTest = dailyTest,
                 WordId = answer.WordId,
@@ -180,11 +190,11 @@ public partial class DailyTestService(
                 UserAnswerText = answer.UserAnswer,
                 IsCorrect = answer.IsCorrect,
                 AnsweredAt = now
-            })
-            .ToList();
+            });
+        }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
-        var streak = await streakService.UpdateLearningActivityAsync(userId, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        var streak = await _streakService.UpdateLearningActivityAsync(userId, cancellationToken);
 
         return new CompleteDailyTestResponse
         {
@@ -212,7 +222,7 @@ public partial class DailyTestService(
                 type = type == "english_to_russian_choice"
                     ? "english_to_russian_input"
                     : "russian_to_english_input";
-                options = [];
+                options = new List<string>();
             }
         }
 
@@ -243,78 +253,122 @@ public partial class DailyTestService(
             .Take(3)
             .ToList();
 
-        return incorrectOptions.Count < 3
-            ? []
-            : Shuffle([correctAnswer, .. incorrectOptions]).ToList();
+        if (incorrectOptions.Count < 3)
+        {
+            return new List<string>();
+        }
+
+        var options = new List<string>();
+        options.Add(correctAnswer);
+        options.AddRange(incorrectOptions);
+
+        return Shuffle(options);
     }
 
     private async Task<List<LearnedWord>> GetLearnedWordsAsync(
         Guid userId,
-        CancellationToken cancellationToken) =>
-        await dbContext.UserWordProgresses
+        CancellationToken cancellationToken)
+    {
+        return await _context.UserWordProgresses
             .Where(progress =>
                 progress.UserId == userId
                 && progress.Word.IsActive
                 && progress.Word.Level.IsActive
                 && progress.Word.Level.Section.IsActive)
             .OrderBy(progress => progress.WordId)
-            .Select(progress => new LearnedWord(
-                progress.WordId,
-                progress.Word.English,
-                progress.Word.Russian))
+            .Select(progress => new LearnedWord
+            {
+                Id = progress.WordId,
+                English = progress.Word.English,
+                Russian = progress.Word.Russian
+            })
             .ToListAsync(cancellationToken);
+    }
 
-    private static string? GetQuestionText(string type, LearnedWord word) =>
-        type switch
+    private static string? GetQuestionText(string type, LearnedWord word)
+    {
+        if (type == "english_to_russian_choice" || type == "english_to_russian_input")
         {
-            "english_to_russian_choice" => word.English,
-            "english_to_russian_input" => word.English,
-            "russian_to_english_choice" => word.Russian,
-            "russian_to_english_input" => word.Russian,
-            _ => word.English
-        };
+            return word.English;
+        }
 
-    private static string GetCorrectAnswer(string type, LearnedWord word) =>
-        UsesRussianAnswer(type)
-            ? word.Russian
-            : word.English;
+        if (type == "russian_to_english_choice" || type == "russian_to_english_input")
+        {
+            return word.Russian;
+        }
 
-    private static bool UsesRussianAnswer(string type) =>
-        type is "english_to_russian_choice" or "english_to_russian_input";
+        return word.English;
+    }
 
-    private static string Normalize(string? value) =>
-        RepeatedSpacesRegex()
-            .Replace((value ?? string.Empty).Trim().ToLowerInvariant(), " ");
+    private static string GetCorrectAnswer(string type, LearnedWord word)
+    {
+        if (UsesRussianAnswer(type))
+        {
+            return word.Russian;
+        }
 
-    private static List<T> Shuffle<T>(IEnumerable<T> values) =>
-        values
+        return word.English;
+    }
+
+    private static bool UsesRussianAnswer(string type)
+    {
+        return type == "english_to_russian_choice" || type == "english_to_russian_input";
+    }
+
+    private static string Normalize(string? value)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(
+            (value ?? string.Empty).Trim().ToLowerInvariant(),
+            @"\s+",
+            " ");
+    }
+
+    private static List<T> Shuffle<T>(IEnumerable<T> values)
+    {
+        return values
             .OrderBy(_ => Random.Shared.Next())
             .ToList();
+    }
 
-    private static DateOnly GetServerDate() =>
-        DateOnly.FromDateTime(DateTime.Now);
+    private static DateOnly GetServerDate()
+    {
+        return DateOnly.FromDateTime(DateTime.Now);
+    }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 
-    private static ApiException CreateValidationException(string field, string message) =>
-        new(
+    private static ApiException CreateValidationException(string field, string message)
+    {
+        return new ApiException(
             StatusCodes.Status400BadRequest,
             "validation_error",
             "Validation failed",
             new Dictionary<string, string[]>
             {
-                [field] = [message]
+                [field] = new[] { message }
             });
+    }
 
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex RepeatedSpacesRegex();
+    private class LearnedWord
+    {
+        public int Id { get; set; }
 
-    private sealed record LearnedWord(int Id, string English, string Russian);
+        public string English { get; set; } = string.Empty;
 
-    private sealed record CheckedDailyTestAnswer(
-        int WordId,
-        string ExerciseType,
-        string UserAnswer,
-        bool IsCorrect);
+        public string Russian { get; set; } = string.Empty;
+    }
+
+    private class CheckedDailyTestAnswer
+    {
+        public int WordId { get; set; }
+
+        public string ExerciseType { get; set; } = string.Empty;
+
+        public string UserAnswer { get; set; } = string.Empty;
+
+        public bool IsCorrect { get; set; }
+    }
 }

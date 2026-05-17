@@ -7,11 +7,22 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class AuthService(
-    AppDbContext dbContext,
-    IPasswordHashService passwordHashService,
-    IJwtTokenService jwtTokenService) : IAuthService
+public class AuthService : IAuthService
 {
+    private readonly AppDbContext _context;
+    private readonly IPasswordHashService _passwordHashService;
+    private readonly IJwtTokenService _jwtTokenService;
+
+    public AuthService(
+        AppDbContext context,
+        IPasswordHashService passwordHashService,
+        IJwtTokenService jwtTokenService)
+    {
+        _context = context;
+        _passwordHashService = passwordHashService;
+        _jwtTokenService = jwtTokenService;
+    }
+
     public async Task<AuthResponse> RegisterAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default)
@@ -21,7 +32,7 @@ public class AuthService(
         var now = CreateTimestamp();
         var email = NormalizeEmail(request.Email);
 
-        var avatar = await dbContext.Avatars
+        var avatar = await _context.Avatars
             .Where(candidate => candidate.Id == request.AvatarId && candidate.IsActive)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -33,11 +44,11 @@ public class AuthService(
                 "Validation failed",
                 new Dictionary<string, string[]>
                 {
-                    ["avatarId"] = ["Avatar must exist and be active"]
+                    ["avatarId"] = new[] { "Avatar must exist and be active" }
                 });
         }
 
-        var emailExists = await dbContext.Users
+        var emailExists = await _context.Users
             .AnyAsync(user => user.Email == email, cancellationToken);
 
         if (emailExists)
@@ -54,7 +65,7 @@ public class AuthService(
             Email = email,
             CreatedAt = now
         };
-        user.PasswordHash = passwordHashService.HashPassword(user, request.Password);
+        user.PasswordHash = _passwordHashService.HashPassword(user, request.Password);
 
         var profile = new UserProfile
         {
@@ -67,7 +78,7 @@ public class AuthService(
             CreatedAt = now
         };
 
-        var levels = await dbContext.Levels
+        var levels = await _context.Levels
             .Include(level => level.Section)
             .Where(level => level.IsActive && level.Section.IsActive)
             .OrderBy(level => level.Section.SortOrder)
@@ -80,11 +91,12 @@ public class AuthService(
             .Select(group => group.OrderBy(level => level.SortOrder).First().Id)
             .ToHashSet();
 
-        var progress = levels.Select(level =>
+        var progress = new List<UserLevelProgress>();
+        foreach (var level in levels)
         {
             var isAvailable = firstNormalLevelIds.Contains(level.Id);
 
-            return new UserLevelProgress
+            progress.Add(new UserLevelProgress
             {
                 UserId = user.Id,
                 LevelId = level.Id,
@@ -92,14 +104,14 @@ public class AuthService(
                 WordsLearned = false,
                 UnlockedAt = isAvailable ? now : null,
                 AttemptsCount = 0
-            };
-        });
+            });
+        }
 
-        dbContext.Users.Add(user);
-        dbContext.UserProfiles.Add(profile);
-        dbContext.UserLevelProgresses.AddRange(progress);
+        _context.Users.Add(user);
+        _context.UserProfiles.Add(profile);
+        _context.UserLevelProgresses.AddRange(progress);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return CreateAuthResponse(user, profile, avatar);
     }
@@ -111,12 +123,12 @@ public class AuthService(
         ValidateLoginRequest(request);
 
         var email = NormalizeEmail(request.Email);
-        var user = await dbContext.Users
+        var user = await _context.Users
             .Include(candidate => candidate.UserProfile!)
             .ThenInclude(profile => profile.Avatar)
             .FirstOrDefaultAsync(candidate => candidate.Email == email, cancellationToken);
 
-        if (user is null || !passwordHashService.VerifyPassword(user, request.Password))
+        if (user is null || !_passwordHashService.VerifyPassword(user, request.Password))
         {
             throw new ApiException(
                 StatusCodes.Status401Unauthorized,
@@ -131,34 +143,41 @@ public class AuthService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users
+        var user = await _context.Users
             .Include(candidate => candidate.UserProfile!)
             .ThenInclude(profile => profile.Avatar)
             .FirstOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
 
-        return user?.UserProfile is null
-            ? null
-            : CreateCurrentUserResponse(user, user.UserProfile, user.UserProfile.Avatar);
+        if (user is null || user.UserProfile is null)
+        {
+            return null;
+        }
+
+        return CreateCurrentUserResponse(user, user.UserProfile, user.UserProfile.Avatar);
     }
 
-    private AuthResponse CreateAuthResponse(User user, UserProfile profile, Avatar avatar) =>
-        new()
+    private AuthResponse CreateAuthResponse(User user, UserProfile profile, Avatar avatar)
+    {
+        return new AuthResponse
         {
-            AccessToken = jwtTokenService.CreateAccessToken(user),
+            AccessToken = _jwtTokenService.CreateAccessToken(user),
             User = CreateCurrentUserResponse(user, profile, avatar)
         };
+    }
 
     private static CurrentUserResponse CreateCurrentUserResponse(
         User user,
         UserProfile profile,
-        Avatar avatar) =>
-        new()
+        Avatar avatar)
+    {
+        return new CurrentUserResponse
         {
             Id = user.Id.ToString(),
             Name = profile.Name,
             Email = user.Email,
             AvatarUrl = avatar.ImageUrl
         };
+    }
 
     private static void ValidateRegisterRequest(RegisterRequest request)
     {
@@ -171,12 +190,12 @@ public class AuthService(
 
         if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
         {
-            details["confirmPassword"] = ["Password and confirmPassword must match"];
+            details["confirmPassword"] = new[] { "Password and confirmPassword must match" };
         }
 
         if (request.AvatarId <= 0)
         {
-            details["avatarId"] = ["Avatar is required"];
+            details["avatarId"] = new[] { "Avatar is required" };
         }
 
         ThrowIfValidationFailed(details);
@@ -200,7 +219,7 @@ public class AuthService(
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            details[key] = [message];
+            details[key] = new[] { message };
         }
     }
 
@@ -218,9 +237,13 @@ public class AuthService(
             details);
     }
 
-    private static string NormalizeEmail(string email) =>
-        email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(string email)
+    {
+        return email.Trim().ToLowerInvariant();
+    }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 }

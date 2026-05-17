@@ -9,8 +9,15 @@ namespace Swirl.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/sections")]
-public class SectionsController(IContentService contentService) : ControllerBase
+public class SectionsController : ControllerBase
 {
+    private readonly IContentService _contentService;
+
+    public SectionsController(IContentService contentService)
+    {
+        _contentService = contentService;
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<SectionResponse>>> GetSections(CancellationToken cancellationToken)
     {
@@ -20,7 +27,8 @@ public class SectionsController(IContentService contentService) : ControllerBase
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await contentService.GetSectionsAsync(userId.Value, cancellationToken));
+        var sections = await _contentService.GetSectionsAsync(userId.Value, cancellationToken);
+        return Ok(sections);
     }
 
     [HttpGet("{sectionId:int}")]
@@ -34,11 +42,14 @@ public class SectionsController(IContentService contentService) : ControllerBase
             return CreateUnauthorizedResult();
         }
 
-        var section = await contentService.GetSectionAsync(userId.Value, sectionId, cancellationToken);
+        var section = await _contentService.GetSectionAsync(userId.Value, sectionId, cancellationToken);
 
-        return section is null
-            ? CreateNotFoundResult()
-            : Ok(section);
+        if (section is null)
+        {
+            return CreateNotFoundResult();
+        }
+
+        return Ok(section);
     }
 
     [HttpGet("{sectionId:int}/levels")]
@@ -52,11 +63,14 @@ public class SectionsController(IContentService contentService) : ControllerBase
             return CreateUnauthorizedResult();
         }
 
-        var levels = await contentService.GetSectionLevelsAsync(userId.Value, sectionId, cancellationToken);
+        var levels = await _contentService.GetSectionLevelsAsync(userId.Value, sectionId, cancellationToken);
 
-        return levels is null
-            ? CreateNotFoundResult()
-            : Ok(levels);
+        if (levels is null)
+        {
+            return CreateNotFoundResult();
+        }
+
+        return Ok(levels);
     }
 
     private Guid? GetCurrentUserId()
@@ -64,18 +78,25 @@ public class SectionsController(IContentService contentService) : ControllerBase
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
-        return Guid.TryParse(userIdValue, out var userId)
-            ? userId
-            : null;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 
-    private static UnauthorizedObjectResult CreateUnauthorizedResult() =>
-        new(new ErrorResponse(new ErrorDetails(
+    private static UnauthorizedObjectResult CreateUnauthorizedResult()
+    {
+        return new UnauthorizedObjectResult(new ErrorResponse(new ErrorDetails(
             "unauthorized",
             "Authentication is required")));
+    }
 
-    private static NotFoundObjectResult CreateNotFoundResult() =>
-        new(new ErrorResponse(new ErrorDetails(
+    private static NotFoundObjectResult CreateNotFoundResult()
+    {
+        return new NotFoundObjectResult(new ErrorResponse(new ErrorDetails(
             "not_found",
             "Resource not found")));
+    }
 }

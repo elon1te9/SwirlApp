@@ -10,8 +10,15 @@ namespace Swirl.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/profile")]
-public class ProfileController(IProfileService profileService) : ControllerBase
+public class ProfileController : ControllerBase
 {
+    private readonly IProfileService _profileService;
+
+    public ProfileController(IProfileService profileService)
+    {
+        _profileService = profileService;
+    }
+
     [HttpGet]
     public async Task<ActionResult<ProfileResponse>> GetProfile(CancellationToken cancellationToken)
     {
@@ -23,7 +30,7 @@ public class ProfileController(IProfileService profileService) : ControllerBase
                 "Authentication is required")));
         }
 
-        var profile = await profileService.GetProfileAsync(userId.Value, cancellationToken);
+        var profile = await _profileService.GetProfileAsync(userId.Value, cancellationToken);
         if (profile is null)
         {
             return NotFound(new ErrorResponse(new ErrorDetails(
@@ -47,7 +54,8 @@ public class ProfileController(IProfileService profileService) : ControllerBase
                 "Authentication is required")));
         }
 
-        return Ok(await profileService.ChangeAvatarAsync(userId.Value, request, cancellationToken));
+        var result = await _profileService.ChangeAvatarAsync(userId.Value, request, cancellationToken);
+        return Ok(result);
     }
 
     private Guid? GetCurrentUserId()
@@ -55,8 +63,11 @@ public class ProfileController(IProfileService profileService) : ControllerBase
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
-        return Guid.TryParse(userIdValue, out var userId)
-            ? userId
-            : null;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 }

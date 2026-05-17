@@ -10,11 +10,22 @@ namespace Swirl.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/levels")]
-public class LevelsController(
-    IContentService contentService,
-    IWordLearningService wordLearningService,
-    ILearningService learningService) : ControllerBase
+public class LevelsController : ControllerBase
 {
+    private readonly IContentService _contentService;
+    private readonly IWordLearningService _wordLearningService;
+    private readonly ILearningService _learningService;
+
+    public LevelsController(
+        IContentService contentService,
+        IWordLearningService wordLearningService,
+        ILearningService learningService)
+    {
+        _contentService = contentService;
+        _wordLearningService = wordLearningService;
+        _learningService = learningService;
+    }
+
     [HttpGet("{levelId:int}")]
     public async Task<ActionResult<LevelDetailsResponse>> GetLevel(
         int levelId,
@@ -28,13 +39,16 @@ public class LevelsController(
                 "Authentication is required")));
         }
 
-        var level = await contentService.GetLevelAsync(userId.Value, levelId, cancellationToken);
+        var level = await _contentService.GetLevelAsync(userId.Value, levelId, cancellationToken);
 
-        return level is null
-            ? NotFound(new ErrorResponse(new ErrorDetails(
+        if (level is null)
+        {
+            return NotFound(new ErrorResponse(new ErrorDetails(
                 "not_found",
-                "Resource not found")))
-            : Ok(level);
+                "Resource not found")));
+        }
+
+        return Ok(level);
     }
 
     [HttpGet("{levelId:int}/words")]
@@ -48,10 +62,12 @@ public class LevelsController(
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await wordLearningService.GetLevelWordsAsync(
+        var words = await _wordLearningService.GetLevelWordsAsync(
             userId.Value,
             levelId,
-            cancellationToken));
+            cancellationToken);
+
+        return Ok(words);
     }
 
     [HttpPost("{levelId:int}/words/mark-learned")]
@@ -66,11 +82,13 @@ public class LevelsController(
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await wordLearningService.MarkLevelWordsLearnedAsync(
+        var result = await _wordLearningService.MarkLevelWordsLearnedAsync(
             userId.Value,
             levelId,
             request,
-            cancellationToken));
+            cancellationToken);
+
+        return Ok(result);
     }
 
     [HttpGet("{levelId:int}/session")]
@@ -84,10 +102,12 @@ public class LevelsController(
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await learningService.GetLevelSessionAsync(
+        var session = await _learningService.GetLevelSessionAsync(
             userId.Value,
             levelId,
-            cancellationToken));
+            cancellationToken);
+
+        return Ok(session);
     }
 
     [HttpPost("{levelId:int}/complete")]
@@ -102,11 +122,13 @@ public class LevelsController(
             return CreateUnauthorizedResult();
         }
 
-        return Ok(await learningService.CompleteLevelAsync(
+        var result = await _learningService.CompleteLevelAsync(
             userId.Value,
             levelId,
             request,
-            cancellationToken));
+            cancellationToken);
+
+        return Ok(result);
     }
 
     private Guid? GetCurrentUserId()
@@ -114,13 +136,18 @@ public class LevelsController(
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
 
-        return Guid.TryParse(userIdValue, out var userId)
-            ? userId
-            : null;
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 
-    private static UnauthorizedObjectResult CreateUnauthorizedResult() =>
-        new(new ErrorResponse(new ErrorDetails(
+    private static UnauthorizedObjectResult CreateUnauthorizedResult()
+    {
+        return new UnauthorizedObjectResult(new ErrorResponse(new ErrorDetails(
             "unauthorized",
             "Authentication is required")));
+    }
 }

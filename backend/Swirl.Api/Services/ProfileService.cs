@@ -6,10 +6,18 @@ using Swirl.Api.Responses;
 
 namespace Swirl.Api.Services;
 
-public class ProfileService(AppDbContext dbContext) : IProfileService
+public class ProfileService : IProfileService
 {
-    public async Task<List<AvatarResponse>> GetAvatarsAsync(CancellationToken cancellationToken = default) =>
-        await dbContext.Avatars
+    private readonly AppDbContext _context;
+
+    public ProfileService(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<AvatarResponse>> GetAvatarsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Avatars
             .Where(avatar => avatar.IsActive)
             .OrderBy(avatar => avatar.Id)
             .Select(avatar => new AvatarResponse
@@ -19,12 +27,13 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
                 ImageUrl = avatar.ImageUrl
             })
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<ProfileResponse?> GetProfileAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var profile = await dbContext.UserProfiles
+        var profile = await _context.UserProfiles
             .Include(candidate => candidate.Avatar)
             .FirstOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken);
 
@@ -33,25 +42,45 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
             return null;
         }
 
-        var learnedWordsCount = await dbContext.UserWordProgresses
+        var learnedWordsCount = await _context.UserWordProgresses
             .CountAsync(progress => progress.UserId == userId, cancellationToken);
 
-        var completedLevelsCount = await dbContext.UserLevelProgresses
+        var completedLevelsCount = await _context.UserLevelProgresses
             .CountAsync(
                 progress => progress.UserId == userId && progress.Status == "completed",
                 cancellationToken);
 
-        var completedLevelIds = await dbContext.UserLevelProgresses
+        var completedLevelIds = await _context.UserLevelProgresses
             .Where(progress => progress.UserId == userId && progress.Status == "completed")
             .Select(progress => progress.LevelId)
             .ToListAsync(cancellationToken);
 
         var completedLevelIdsSet = completedLevelIds.ToHashSet();
-        var sections = await dbContext.Sections
+        var sections = await _context.Sections
             .Include(section => section.Levels)
             .Where(section => section.IsActive)
             .OrderBy(section => section.SortOrder)
             .ToListAsync(cancellationToken);
+
+        var sectionProgress = new List<SectionProgressResponse>();
+        foreach (var section in sections)
+        {
+            var activeLevels = section.Levels
+                .Where(level => level.IsActive)
+                .ToList();
+            var totalLevels = activeLevels.Count;
+            var completedLevels = activeLevels.Count(level => completedLevelIdsSet.Contains(level.Id));
+            var progressPercent = totalLevels == 0
+                ? 0
+                : (int)Math.Round(completedLevels * 100.0 / totalLevels);
+
+            sectionProgress.Add(new SectionProgressResponse
+            {
+                SectionId = section.Id,
+                Title = section.Title,
+                ProgressPercent = progressPercent
+            });
+        }
 
         return new ProfileResponse
         {
@@ -61,23 +90,7 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
             BestStreak = profile.BestStreak,
             LearnedWordsCount = learnedWordsCount,
             CompletedLevelsCount = completedLevelsCount,
-            SectionsProgress = sections.Select(section =>
-            {
-                var activeLevels = section.Levels
-                    .Where(level => level.IsActive)
-                    .ToList();
-                var totalLevels = activeLevels.Count;
-                var completedLevels = activeLevels.Count(level => completedLevelIdsSet.Contains(level.Id));
-
-                return new SectionProgressResponse
-                {
-                    SectionId = section.Id,
-                    Title = section.Title,
-                    ProgressPercent = totalLevels == 0
-                        ? 0
-                        : (int)Math.Round(completedLevels * 100.0 / totalLevels)
-                };
-            }).ToList()
+            SectionsProgress = sectionProgress
         };
     }
 
@@ -91,7 +104,7 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
             throw CreateInvalidAvatarException("Avatar is required");
         }
 
-        var avatar = await dbContext.Avatars
+        var avatar = await _context.Avatars
             .FirstOrDefaultAsync(
                 candidate => candidate.Id == request.AvatarId && candidate.IsActive,
                 cancellationToken);
@@ -101,7 +114,7 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
             throw CreateInvalidAvatarException("Avatar must exist and be active");
         }
 
-        var profile = await dbContext.UserProfiles
+        var profile = await _context.UserProfiles
             .FirstOrDefaultAsync(candidate => candidate.UserId == userId, cancellationToken);
 
         if (profile is null)
@@ -115,7 +128,7 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
         profile.AvatarId = avatar.Id;
         profile.UpdatedAt = CreateTimestamp();
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new ChangeAvatarResponse
         {
@@ -123,16 +136,20 @@ public class ProfileService(AppDbContext dbContext) : IProfileService
         };
     }
 
-    private static ApiException CreateInvalidAvatarException(string message) =>
-        new(
+    private static ApiException CreateInvalidAvatarException(string message)
+    {
+        return new ApiException(
             StatusCodes.Status400BadRequest,
             "validation_error",
             "Validation failed",
             new Dictionary<string, string[]>
             {
-                ["avatarId"] = [message]
+                ["avatarId"] = new[] { message }
             });
+    }
 
-    private static DateTime CreateTimestamp() =>
-        DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    private static DateTime CreateTimestamp()
+    {
+        return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+    }
 }

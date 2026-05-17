@@ -7,19 +7,26 @@ using Swirl.Api.Models;
 
 namespace Swirl.Api.Services;
 
-public class JwtTokenService(IConfiguration configuration) : IJwtTokenService
+public class JwtTokenService : IJwtTokenService
 {
+    private readonly IConfiguration _configuration;
+
+    public JwtTokenService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
     public string CreateAccessToken(User user)
     {
-        var secret = configuration["Jwt:Secret"];
+        var secret = _configuration["Jwt:Secret"];
         if (string.IsNullOrWhiteSpace(secret))
         {
             throw new InvalidOperationException("JWT secret is not configured.");
         }
 
-        var issuer = configuration["Jwt:Issuer"] ?? "Swirl.Api";
-        var audience = configuration["Jwt:Audience"] ?? "Swirl.Android";
-        var accessTokenMinutes = configuration.GetValue("Jwt:AccessTokenMinutes", 60);
+        var issuer = _configuration["Jwt:Issuer"] ?? "Swirl.Api";
+        var audience = _configuration["Jwt:Audience"] ?? "Swirl.Android";
+        var accessTokenMinutes = _configuration.GetValue("Jwt:AccessTokenMinutes", 60);
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
