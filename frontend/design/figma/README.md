@@ -58,3 +58,16 @@ python tools/export_figma_design.py
 ```
 
 Do not commit real Figma tokens. The token is read only from `FIGMA_TOKEN`.
+
+## Generated specs
+
+Markdown specs in `../specs/` use coordinates relative to the exported root frame:
+
+```text
+relativeX = child.absoluteBoundingBox.x - rootFrame.absoluteBoundingBox.x
+relativeY = child.absoluteBoundingBox.y - rootFrame.absoluteBoundingBox.y
+```
+
+Absolute canvas coordinates are kept only as debug information. The specs include nested nodes up to depth 4, with headings such as `###`, `####`, and `#####`.
+
+For text layers, specs include text content, font values, fill color, relative position, and size. For frames, groups, and rectangles, specs include type, relative position, size, fill colors, and corner radius when available.
